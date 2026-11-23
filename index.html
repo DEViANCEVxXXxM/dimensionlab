@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#040814">
+<title>Dimension Lab — 1D / 2D / 3D / 4D Visualization Studio</title>
+<style>
+    :root {
+      --bg-dark: #040814;
+      --panel-bg: rgba(6, 14, 26, 0.78);
+      --panel-border: rgba(141, 117, 255, 0.22);
+      --panel-hover: rgba(141, 117, 255, 0.35);
+      --text-main: #eff0ff;
+      --text-muted: #9a9dbb;
+      --accent-aurora: #8d75ff;
+      --accent-aurora-glow: rgba(141, 117, 255, 0.45);
+      --accent-violet: #a55eea;
+      --accent-red: #ff4757;
+      --accent-amber: #ffa502;
+      --font-mono: 'SF Mono', 'Fira Code', 'Roboto Mono', monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background-color: var(--bg-dark); font-family: var(--font-sans); color: var(--text-main); }
+    #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+    /* Top Action Bar */
+    .top-bar {
+      position: absolute; top: 20px; left: 24px; right: 24px;
+      display: flex; justify-content: space-between; align-items: center;
+      z-index: 10; pointer-events: none;
+    }
+    .brand-group {
+      display: flex; align-items: center; gap: 14px;
+      background: var(--panel-bg); backdrop-filter: blur(16px);
+      border: 1px solid var(--panel-border); padding: 8px 18px;
+      border-radius: 30px; pointer-events: auto;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+    }
+    .brand-title { font-weight: 700; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: #fff; }
+    .badge-status {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-family: var(--font-mono); color: var(--accent-aurora);
+      background: rgba(141, 117, 255, 0.12); padding: 3px 9px; border-radius: 12px;
+      border: 1px solid rgba(141, 117, 255, 0.3);
+    }
+    .badge-status::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent-aurora); box-shadow: 0 0 10px var(--accent-aurora);
+      animation: pulse 2s infinite ease-in-out;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 0.4; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.3); } }
+
+    .action-group { display: flex; gap: 10px; pointer-events: auto; }
+    .glass-btn {
+      background: var(--panel-bg); backdrop-filter: blur(16px);
+      border: 1px solid var(--panel-border); color: var(--text-main);
+      padding: 9px 16px; border-radius: 20px; font-size: 12px; font-weight: 500;
+      cursor: pointer; display: flex; align-items: center; gap: 8px;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .glass-btn:hover {
+      background: var(--panel-hover); border-color: var(--accent-aurora);
+      transform: translateY(-2px); box-shadow: 0 12px 28px var(--accent-aurora-glow);
+    }
+    .glass-btn.active { background: var(--accent-aurora); color: #040814; font-weight: 700; }
+
+    /* Live Geomagnetic HUD */
+    .hud-overlay {
+      position: absolute; top: 80px; left: 24px; z-index: 10;
+      background: var(--panel-bg); backdrop-filter: blur(16px);
+      border: 1px solid var(--panel-border); border-radius: 16px;
+      padding: 16px 20px; min-width: 250px; pointer-events: none;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.5);
+    }
+    .hud-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 12px; }
+    .kp-meter-box { margin-bottom: 12px; }
+    .kp-header { display: flex; justify-content: space-between; font-size: 12px; font-family: var(--font-mono); margin-bottom: 5px; }
+    .kp-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; position: relative; }
+    .kp-fill { height: 100%; width: 70%; background: linear-gradient(90deg, #8d75ff, #00d2d3, #a55eea, #ff4757); border-radius: 3px; transition: width 0.4s ease; }
+    .hud-row { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; margin-top: 6px; color: #b4b6d5; }
+    .hud-val { color: #fff; font-weight: 600; }
+
+    /* Camera Preset Dock matching the map regions */
+    .camera-dock {
+      position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 8px; background: var(--panel-bg); backdrop-filter: blur(18px);
+      border: 1px solid var(--panel-border); padding: 7px; border-radius: 32px;
+      z-index: 10; box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    }
+    .dock-btn {
+      background: transparent; border: none; color: var(--text-muted);
+      padding: 8px 16px; border-radius: 20px; font-size: 12px; font-weight: 500;
+      cursor: pointer; transition: all 0.25s ease;
+    }
+    .dock-btn:hover { color: var(--text-main); background: rgba(255,255,255,0.06); }
+    .dock-btn.active {
+      color: #040814; background: var(--accent-aurora); font-weight: 700;
+      box-shadow: 0 4px 18px var(--accent-aurora-glow);
+    }
+
+    /* Inspector Drawer */
+    .inspector {
+      position: absolute; top: 80px; right: 24px; bottom: 28px; width: 330px;
+      background: var(--panel-bg); backdrop-filter: blur(20px);
+      border: 1px solid var(--panel-border); border-radius: 20px;
+      z-index: 10; display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 16px 45px rgba(0,0,0,0.5);
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+    }
+    .inspector.collapsed { transform: translateX(370px); opacity: 0; pointer-events: none; }
+    .tab-header { display: flex; border-bottom: 1px solid var(--panel-border); background: rgba(0,0,0,0.25); }
+    .tab-btn {
+      flex: 1; padding: 13px 0; background: transparent; border: none;
+      color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 1px; cursor: pointer; transition: all 0.2s ease;
+    }
+    .tab-btn.active { color: var(--accent-aurora); border-bottom: 2px solid var(--accent-aurora); background: rgba(141, 117, 255, 0.05); }
+    .tab-content { flex: 1; overflow-y: auto; padding: 20px; display: none; }
+    .tab-content.active { display: block; }
+
+    .ctrl-group { margin-bottom: 18px; }
+    .ctrl-label { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 7px; color: var(--text-muted); }
+    .ctrl-label span.val { color: var(--accent-aurora); font-family: var(--font-mono); }
+    input[type=range] {
+      width: 100%; height: 4px; background: rgba(255,255,255,0.12); border-radius: 2px;
+      outline: none; -webkit-appearance: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+      background: var(--accent-aurora); cursor: pointer;
+      box-shadow: 0 0 10px var(--accent-aurora); transition: transform 0.15s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+    .trigger-substorm-btn {
+      width: 100%; padding: 12px; border-radius: 12px; border: 1px solid rgba(255, 71, 87, 0.4);
+      background: linear-gradient(135deg, rgba(255, 71, 87, 0.25), rgba(165, 94, 234, 0.25));
+      color: #fff; font-weight: 700; font-size: 12px; letter-spacing: 1px; text-transform: uppercase;
+      cursor: pointer; transition: all 0.25s ease; box-shadow: 0 6px 20px rgba(255,71,87,0.25);
+    }
+    .trigger-substorm-btn:hover {
+      background: linear-gradient(135deg, rgba(255, 71, 87, 0.45), rgba(165, 94, 234, 0.45));
+      box-shadow: 0 8px 26px rgba(255,71,87,0.4); transform: translateY(-1px);
+    }
+
+    .stat-card {
+      background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+    }
+    .stat-title { font-size: 10px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+    .stat-val { font-size: 18px; font-weight: 700; font-family: var(--font-mono); color: #fff; }
+
+    /* Tooltip & Shortcuts */
+    .shortcut-hints {
+      position: absolute; bottom: 28px; left: 24px; z-index: 10;
+      font-size: 11px; font-family: var(--font-mono); color: var(--text-muted);
+      background: var(--panel-bg); backdrop-filter: blur(12px);
+      padding: 6px 14px; border-radius: 20px; border: 1px solid var(--panel-border);
+      pointer-events: none;
+    }
+    .shortcut-hints kbd {
+      background: rgba(255,255,255,0.12); padding: 1px 5px; border-radius: 4px;
+      color: #fff; font-size: 10px; margin: 0 2px;
+    }
+
+    /* Cinematic Mode Hide */
+    .ui-hidden .top-bar,
+    .ui-hidden .hud-overlay,
+    .ui-hidden .camera-dock,
+    .ui-hidden .inspector,
+    .ui-hidden .shortcut-hints {
+      opacity: 0 !important; pointer-events: none !important;
+    }
+  
+    /* Dimension Studio additions, preserving the template layout. */
+    :root { --accent-cyan:#60e6ed; --accent-pink:#ed86e2; }
+    .kp-fill { background:linear-gradient(90deg,#66dbe7,#8d75ff,#ed86e2,#c76aff); }
+    .badge-status { background:rgba(141,117,255,.10); }
+    .trigger-substorm-btn { border-color:rgba(141,117,255,.45); background:linear-gradient(135deg,rgba(103,76,225,.25),rgba(68,198,214,.12)); box-shadow:0 6px 20px rgba(107,75,226,.15); }
+    .trigger-substorm-btn:hover { background:linear-gradient(135deg,rgba(128,98,246,.37),rgba(72,205,216,.22)); box-shadow:0 9px 30px rgba(141,117,255,.2); }
+    .check-row { display:flex; align-items:center; justify-content:space-between; margin:0 0 14px; font-size:11px; color:var(--text-muted); gap:12px; cursor:pointer; }
+    .check-row input { appearance:none; width:32px; height:18px; background:rgba(200,210,255,.12); border-radius:30px; border:1px solid rgba(180,190,250,.22); position:relative; cursor:pointer; flex-shrink:0; transition:background .2s; }
+    .check-row input:before { content:''; position:absolute; top:3px; left:3px; height:10px; width:10px; background:#a5a8bf; border-radius:50%; transition:all .2s; }
+    .check-row input:checked { background:rgba(141,117,255,.65); border-color:var(--accent-aurora); }
+    .check-row input:checked:before { left:17px; background:#fff; }
+    .thin-divider { height:1px; width:100%; background:rgba(255,255,255,.07); margin:15px 0 18px; }
+    .inspector select { width:100%; padding:10px 12px; background:#101b2b; border:1px solid var(--panel-border); border-radius:9px; color:var(--text-main); outline:none; font:12px var(--font-sans); }
+    .inspector select:focus { border-color:var(--accent-aurora); }
+    .dimension-note { font-size:11px; color:var(--text-muted); line-height:1.65; }
+    .hud-row span:first-child { max-width:160px; }
+    .hud-row { gap:16px; }
+    .hud-val { text-align:right; }
+    .scene-caption { position:absolute; left:50%; top:14%; transform:translateX(-50%); z-index:4; text-align:center; pointer-events:none; min-width:260px; text-shadow:0 2px 20px rgba(4,8,20,.9); opacity:.85; }
+    .scene-caption .kicker { font:10px var(--font-mono); letter-spacing:3px; color:#8a91b9; text-transform:uppercase; }
+    .scene-caption h1 { font-size:19px; color:#f4f6ff; letter-spacing:2.8px; font-weight:600; margin:7px 0 7px; text-transform:uppercase; }
+    .scene-caption .scene-subtitle { font-size:11px; color:#acb4d4; max-width:450px; margin:auto; line-height:1.55; }
+    .scene-corner { position:absolute; right:375px; bottom:34px; z-index:4; color:#7781a1; font:10px var(--font-mono); pointer-events:none; text-align:right; line-height:1.7; }
+    .ui-hidden .scene-caption,.ui-hidden .scene-corner {opacity:0;}
+    @media (max-width:1220px) { .scene-corner {display:none;} .scene-caption {top:15%;} .hud-overlay{min-width:220px;padding:13px 15px;} .inspector{width:280px;} }
+    @media (max-width:860px) { .inspector{top:115px;bottom:76px;width:260px;right:12px;} .top-bar{top:12px;left:12px;right:12px;align-items:flex-start;gap:7px;} .brand-group{padding:9px 12px;} .brand-title{font-size:10px;} .badge-status{font-size:9px;} .action-group{gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:380px;} .glass-btn{padding:8px 10px;font-size:11px;} .hud-overlay{top:68px;left:12px;min-width:195px;} .scene-caption{top:23%;} .camera-dock{bottom:11px;gap:0;} .dock-btn{font-size:11px;padding:8px 11px;} .shortcut-hints{display:none;} }
+    @media (max-width:600px) {.hud-overlay{top:80px;max-width:190px;padding:10px 12px;} .hud-title{font-size:9px;} .hud-row{font-size:9px;} .scene-caption{top:36%;} .scene-caption h1{font-size:15px;} .scene-caption .scene-subtitle{font-size:10px;max-width:200px;} .brand-title{display:none;} .glass-btn{font-size:0; padding:8px;} .glass-btn::first-letter{font-size:12px;} .camera-dock{max-width:98%;} .dock-btn{font-size:10px;padding:8px;} }
+</style>
+<link rel="stylesheet" href="assets/atelier-ui.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body data-project-id="dimension-lab" data-project-name="Dimension Lab" data-accent="#8d75ff">
+<div id="canvas-container"></div>
+
+<div class="top-bar">
+  <div class="brand-group">
+    <div class="brand-title">Dimension Lab · Spatial Studio</div>
+    <div class="badge-status" id="statusBadge">4D · Hypercube projection</div>
+  </div>
+  <div class="action-group">
+    <button class="glass-btn" id="btnReset" title="Reset dimension & camera [R]">↻ Reset</button>
+    <button class="glass-btn" id="btnPause" title="Toggle animation [Space]">⏸ Pause</button>
+    <button class="glass-btn active" id="btnGuides" title="Toggle coordinate guides [G]">⌗ Guides</button>
+    <button class="glass-btn" id="btnCapture" title="Save screenshot [P]">▣ Capture</button>
+    <button class="glass-btn" id="btnDrawer" title="Toggle Inspector [H]">⚙ Inspector</button>
+    <button class="glass-btn" id="btnFullscreen" title="Fullscreen [F]">⛶</button>
+  </div>
+</div>
+
+<div class="hud-overlay" id="hudOverlay">
+  <div class="hud-title">Spatial system / dimensional telemetry</div>
+  <div class="kp-meter-box">
+    <div class="kp-header"><span>Active dimension</span><span id="hudDim" style="color:var(--accent-aurora)">4 / 4</span></div>
+    <div class="kp-bar"><div class="kp-fill" id="dimProgress" style="width:100%"></div></div>
+  </div>
+  <div class="hud-row"><span>Geometry</span><span class="hud-val" id="hudShape">Tesseract</span></div>
+  <div class="hud-row"><span>Coordinates</span><span class="hud-val" id="hudCoords">X · Y · Z · W</span></div>
+  <div class="hud-row"><span>Vertices / edges</span><span class="hud-val" id="hudCounts">16 / 32</span></div>
+  <div class="hud-row"><span>Projection</span><span class="hud-val" id="hudProjection">4D → 3D → 2D</span></div>
+  <div class="hud-row"><span>Motion</span><span class="hud-val" id="hudMotion">XW · YW rotation</span></div>
+</div>
+
+<div class="scene-caption" id="sceneCaption" aria-live="polite">
+  <div class="kicker">A Journey Beyond Space</div>
+  <h1 id="sceneTitle">The fourth dimension</h1>
+  <div class="scene-subtitle" id="sceneDescription">A rotating four-dimensional hypercube projected into three-dimensional space.</div>
+</div>
+<div class="scene-corner">DRAG TO ORBIT &nbsp;·&nbsp; SCROLL TO ZOOM<br><span id="cornerHint">PERSPECTIVE PROJECTION OF ℝ⁴</span></div>
+
+<div class="camera-dock" id="cameraDock" role="group" aria-label="Choose spatial dimension">
+  <button class="dock-btn" data-dimension="1" title="One-dimensional line">1D · Line</button>
+  <button class="dock-btn" data-dimension="2" title="Two-dimensional square">2D · Plane</button>
+  <button class="dock-btn" data-dimension="3" title="Three-dimensional cube">3D · Space</button>
+  <button class="dock-btn active" data-dimension="4" title="Four-dimensional tesseract">4D · Hypercube</button>
+</div>
+
+<div class="inspector" id="inspectorDrawer">
+  <div class="tab-header">
+    <button class="tab-btn active" data-tab="tab-geo">Geometry</button>
+    <button class="tab-btn" data-tab="tab-optics">Projection</button>
+    <button class="tab-btn" data-tab="tab-analytics">Analytics</button>
+  </div>
+
+  <div class="tab-content active" id="tab-geo">
+    <div class="ctrl-group"><button class="trigger-substorm-btn" id="btnResetRotation">↻ Reset orientation</button></div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>Rotation speed</span><span class="val" id="speedVal">0.70×</span></div>
+      <input type="range" id="sliderSpeed" min="0" max="2.4" step="0.05" value="0.70">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>Geometry size</span><span class="val" id="scaleVal">1.00×</span></div>
+      <input type="range" id="sliderScale" min="0.55" max="1.55" step="0.05" value="1.00">
+    </div>
+    <div class="thin-divider"></div>
+    <div class="ctrl-group" id="fourDGeoLabel"><div class="hud-title">Four-dimensional rotation</div></div>
+    <div class="ctrl-group" id="xwGroup">
+      <div class="ctrl-label"><span>XW plane rotation</span><span class="val" id="xwVal">20°</span></div>
+      <input type="range" id="sliderXW" min="-180" max="180" step="1" value="20">
+    </div>
+    <div class="ctrl-group" id="ywGroup">
+      <div class="ctrl-label"><span>YW plane rotation</span><span class="val" id="ywVal">-15°</span></div>
+      <input type="range" id="sliderYW" min="-180" max="180" step="1" value="-15">
+    </div>
+    <div class="ctrl-group" id="sliceGroup">
+      <div class="ctrl-label"><span>Cross-section position (W)</span><span class="val" id="sliceVal">0.00</span></div>
+      <input type="range" id="sliderSlice" min="-1.9" max="1.9" step="0.05" value="0">
+    </div>
+    <label class="check-row" id="sliceToggleRow"><span>Show 3D cross-section of 4D shape</span><input type="checkbox" id="toggleSlice"></label>
+    <div class="dimension-note" id="geometryTip">A 4D object cannot be seen directly. Its changing 3D projection reveals the fourth spatial coordinate.</div>
+  </div>
+
+  <div class="tab-content" id="tab-optics">
+    <div class="ctrl-group"><div class="ctrl-label"><span>Projection method</span></div>
+      <select id="selectProjection" aria-label="Projection type">
+        <option value="perspective">4D perspective</option><option value="orthographic">4D orthographic</option>
+      </select>
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>4D projection distance</span><span class="val" id="distVal">5.2</span></div>
+      <input type="range" id="sliderDistance" min="3.5" max="10" step="0.1" value="5.2">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>Glow intensity</span><span class="val" id="glowVal">0.85</span></div>
+      <input type="range" id="sliderGlow" min="0" max="2" step="0.05" value="0.85">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label"><span>Background particles</span><span class="val" id="starsVal">0.50</span></div>
+      <input type="range" id="sliderStars" min="0" max="1" step="0.05" value="0.50">
+    </div>
+    <div class="thin-divider"></div>
+    <label class="check-row"><span>Coordinate grid / guides</span><input type="checkbox" id="toggleGuides" checked></label>
+    <label class="check-row"><span>Show vertices</span><input type="checkbox" id="toggleVertices" checked></label>
+    <label class="check-row"><span>Show edges</span><input type="checkbox" id="toggleEdges" checked></label>
+    <label class="check-row"><span>Show dimension labels</span><input type="checkbox" id="toggleLabels" checked></label>
+    <div class="dimension-note">The 4D view is a mathematical projection, not a literal 4D camera. Drag to orbit its 3D projection.</div>
+  </div>
+
+  <div class="tab-content" id="tab-analytics">
+    <div class="stat-card"><div class="stat-title">Rendering frame rate</div><div class="stat-val" id="statFps">— FPS</div></div>
+    <div class="stat-card"><div class="stat-title">Current space</div><div class="stat-val" id="statSpace">ℝ⁴</div></div>
+    <div class="stat-card"><div class="stat-title">Hypercube vertices / edges / square faces / cells</div><div class="stat-val" id="statCounts">16 / 32 / 24 / 8</div></div>
+    <div class="stat-card"><div class="stat-title">Rotation phase</div><div class="stat-val" id="statPhase">0.0°</div></div>
+    <div class="stat-card"><div class="stat-title">Viewing method</div><div class="stat-val" id="statView">Perspective</div></div>
+    <div class="thin-divider"></div>
+    <div class="hud-title">Understanding the dimension</div>
+    <div class="dimension-note" id="statExplanation">A tesseract is the four-dimensional analogue of a cube. Its 4D coordinates are rotated, then projected into 3D and rendered on your 2D screen.</div>
+  </div>
+</div>
+
+<div class="shortcut-hints">
+  <kbd>Space</kbd> Pause &nbsp;|&nbsp; <kbd>1–4</kbd> Dimensions &nbsp;|&nbsp; <kbd>G</kbd> Guides &nbsp;|&nbsp; <kbd>R</kbd> Reset &nbsp;|&nbsp; <kbd>H</kbd> UI &nbsp;|&nbsp; <kbd>P</kbd> Capture &nbsp;|&nbsp; <kbd>F</kbd> Fullscreen
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const $ = (id) => document.getElementById(id);
+const container = $('canvas-container');
+const COLOR = {
+  cyan: 0x66e6f1, violet: 0x9b7dff, pink: 0xef95dd,
+  amber: 0xffd38f, blue: 0x678ffa, white: 0xeaf1ff, muted: 0x576d9a
+};
+const DEG = Math.PI / 180;
+const DATA = {
+  1: { title: 'One dimension', subtitle: 'A point can move in only one independent direction.', geometry: 'Line segment', axes: 'X', coords: 'X', v:2, e:1, faces:'—', label:'ℝ¹', camera:[0,0.4,17], explanation:'A line needs just one coordinate to locate a point. A segment has two endpoints and one edge.' },
+  2: { title: 'Two dimensions', subtitle: 'Length and width create a plane, area, and closed shapes.', geometry: 'Square', axes: 'X · Y', coords: 'X · Y', v:4, e:4, faces:'1', label:'ℝ²', camera:[0,0,16], explanation:'A plane has two independent coordinates. A square has four corners, four edges, and one enclosed 2D face.' },
+  3: { title: 'Three dimensions', subtitle: 'Depth joins width and height to create a spatial volume.', geometry: 'Cube', axes: 'X · Y · Z', coords: 'X · Y · Z', v:8, e:12, faces:'6', label:'ℝ³', camera:[7.4,5.1,13.8], explanation:'A cube occupies three-dimensional space: 8 corners, 12 edges, and 6 square faces surrounding a volume.' },
+  4: { title: 'The fourth dimension', subtitle: 'A 4D hypercube rotates through XW and YW planes, projected into 3D.', geometry: 'Tesseract', axes: 'X · Y · Z · W', coords: 'X · Y · Z · W', v:16, e:32, faces:'24', label:'ℝ⁴', camera:[8.2,5.6,14.3], explanation:'A tesseract has 16 vertices, 32 edges, 24 square faces and 8 cubic cells. The 4D shape is projected into 3D, then rendered on this 2D display. Rotating XW or YW mixes a spatial axis with W.' }
+};
+const STATE = {
+  dimension:4, paused:false, guides:true, vertices:true, edges:true, labels:true,
+  speed:0.7, scale:1, xw:20, yw:-15, slice:0, showSlice:false,
+  method:'perspective', distance:5.2, glow:0.85, stars:0.5,
+  phase:0, fps:60, burst:0
+};
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x040814);
+const camera = new THREE.PerspectiveCamera(43, window.innerWidth/window.innerHeight, .08, 800);
+const renderer = new THREE.WebGLRenderer({antialias:true,alpha:false,preserveDrawingBuffer:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,2));
+renderer.setSize(window.innerWidth,window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+container.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera,renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.07;
+controls.minDistance = 8;
+controls.maxDistance = 36;
+controls.enablePan = false;
+controls.target.set(0,0,0);
+camera.position.set(...DATA[4].camera);
+controls.update();
+
+function radialTexture() {
+  const canvas = document.createElement('canvas'); canvas.width=128; canvas.height=128;
+  const ctx=canvas.getContext('2d');
+  const gr=ctx.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0,'rgba(255,255,255,1)');
+  gr.addColorStop(.13,'rgba(255,255,255,.86)');
+  gr.addColorStop(.38,'rgba(255,255,255,.27)');
+  gr.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=gr; ctx.fillRect(0,0,128,128);
+  const texture=new THREE.CanvasTexture(canvas); texture.colorSpace=THREE.SRGBColorSpace;
+  return texture;
+}
+const glowTexture=radialTexture();
+const backgroundGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture,color:0x382067,opacity:.20,transparent:true,depthWrite:false,depthTest:false,blending:THREE.AdditiveBlending}));
+backgroundGlow.position.set(0,0,-11); backgroundGlow.scale.set(27,22,1); scene.add(backgroundGlow);
+
+// Deliberately quiet atmospheric particles; not part of the geometric object.
+let starSeed=77881;
+function rand(){starSeed=(Math.imul(starSeed,1664525)+1013904223)>>>0;return starSeed/4294967296;}
+const particlePositions=[];
+for(let i=0;i<1100;i++) {
+  let x=(rand()-.5)*68, y=(rand()-.5)*43, z=-10-rand()*72;
+  if(Math.hypot(x,y)<5 && z>-22) x+=x>0?8:-8;
+  particlePositions.push(x,y,z);
+}
+const starGeometry=new THREE.BufferGeometry();
+starGeometry.setAttribute('position',new THREE.Float32BufferAttribute(particlePositions,3));
+const starMaterial=new THREE.PointsMaterial({color:0x8394d5,size:.08,transparent:true,opacity:.36,depthWrite:false,sizeAttenuation:true});
+const stars=new THREE.Points(starGeometry,starMaterial); scene.add(stars);
+
+const cylinderGeometry=new THREE.CylinderGeometry(1,1,1,8,1,false);
+const smallSphereGeometry=new THREE.SphereGeometry(1,14,10);
+const up=new THREE.Vector3(0,1,0);
+const tvA=new THREE.Vector3(),tvB=new THREE.Vector3(),tvDir=new THREE.Vector3(),tvMid=new THREE.Vector3();
+function material(color,opacity=1,additive=false) {
+  return new THREE.MeshBasicMaterial({color,transparent:opacity<1||additive,opacity,depthWrite:false,blending:additive?THREE.AdditiveBlending:THREE.NormalBlending,side:THREE.DoubleSide});
+}
+function segment(group,color,radius=.022,opacity=.9) {
+  const m=new THREE.Mesh(cylinderGeometry,material(color,opacity));
+  const halo=new THREE.Mesh(cylinderGeometry,material(color,.085,true));
+  m.frustumCulled=false;halo.frustumCulled=false;
+  group.add(halo,m);
+  return {core:m,halo,radius,opacity};
+}
+function placeSegment(line,a,b,widthMultiplier=1) {
+  tvA.set(...a); tvB.set(...b);
+  tvDir.subVectors(tvB,tvA);
+  const length=tvDir.length();
+  if(length<1e-5) {line.core.visible=false;line.halo.visible=false;return;}
+  line.core.visible=true; line.halo.visible=true;
+  tvMid.addVectors(tvA,tvB).multiplyScalar(.5);
+  const quat=new THREE.Quaternion().setFromUnitVectors(up,tvDir.multiplyScalar(1/length));
+  line.core.position.copy(tvMid);line.halo.position.copy(tvMid);
+  line.core.quaternion.copy(quat);line.halo.quaternion.copy(quat);
+  line.core.scale.set(line.radius*widthMultiplier,length,line.radius*widthMultiplier);
+  line.halo.scale.set(line.radius*3.5*widthMultiplier,length,line.radius*3.5*widthMultiplier);
+}
+function node(group,color) {
+  const point=new THREE.Mesh(smallSphereGeometry,material(color,.95));
+  point.scale.setScalar(.105);
+  const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture,color,opacity:.26,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+  halo.scale.set(.63,.63,1);
+  group.add(halo,point);
+  return {point,halo};
+}
+function makeLabel(group,text,color,x,y,z,size=1) {
+  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;
+  const ctx=canvas.getContext('2d');ctx.clearRect(0,0,256,128);
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 66px monospace';ctx.fillStyle='#'+new THREE.Color(color).getHexString();
+  ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=15;ctx.fillText(text,128,64);
+  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+  const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false}));
+  sprite.position.set(x,y,z); sprite.scale.set(size*1.08,size*.54,1); group.add(sprite);return sprite;
+}
+function guideLine(group,a,b,color,opacity=.18,thickness=.012) {
+  const ln=segment(group,color,thickness,opacity);placeSegment(ln,a,b);
+  ln.halo.material.opacity=.035;
+  return ln;
+}
+function makeAxisGuides(d) {
+  const g=new THREE.Group();
+  const lg=new THREE.Group();g.add(lg);
+  const length= d===1?4.2:4.3;
+  guideLine(g,[-length,0,0],[length,0,0],COLOR.pink,.29,.01);
+  makeLabel(lg,'X',COLOR.pink,length+.37,0,0,.7);
+  if(d>=2) {
+    guideLine(g,[0,-length,0],[0,length,0],COLOR.cyan,.25,.01);
+    makeLabel(lg,'Y',COLOR.cyan,0,length+.35,0,.7);
+  }
+  if(d>=3) {
+    guideLine(g,[0,0,-length],[0,0,length],COLOR.violet,.20,.011);
+    makeLabel(lg,'Z',COLOR.violet,0,0,length+.40,.7);
+    // The local grid is reference-only, not a simulated physical floor.
+    const floor=new THREE.GridHelper(11,22,0x5d6c9b,0x354364);
+    floor.position.y=-3.55;
+    floor.material.transparent=true; floor.material.opacity=.12; floor.material.depthWrite=false;
+    g.add(floor);
+  } else if(d===2) {
+    for(let t=-3;t<=3;t+=.5) {
+      if(Math.abs(t)<.001)continue;
+      guideLine(g,[t,-3.6,-.07],[t,3.6,-.07],COLOR.muted,.055,.004);
+      guideLine(g,[-3.6,t,-.07],[3.6,t,-.07],COLOR.muted,.055,.004);
+    }
+  } else {
+    for(let t=-3;t<=3;t+=.5) {
+      if(Math.abs(t)<.001) continue;
+      guideLine(g,[t,-.12,0],[t,.12,0],COLOR.muted,.16,.008);
+    }
+  }
+  return {group:g,labels:lg};
+}
+const groups={};
+const geometryObjects={};
+function bitVertices(dim) {
+  const a={1:3.18,2:2.20,3:1.86,4:1.62}[dim];
+  const pts=[];
+  for(let bits=0;bits<(1<<dim);bits++) {
+    const coord=[];for(let k=0;k<dim;k++)coord.push((bits&(1<<k))?a:-a);
+    while(coord.length<4)coord.push(0);
+    if(dim===1) coord[1]=0;
+    pts.push(coord);
+  }
+  return pts;
+}
+function bitEdges(dim) {
+  const edges=[];
+  for(let i=0;i<(1<<dim);i++)for(let axis=0;axis<dim;axis++) {
+    const j=i^(1<<axis);if(j>i)edges.push([i,j,axis]);
+  }
+  return edges;
+}
+function makeObject(dim) {
+  const root=new THREE.Group();scene.add(root);
+  const guides=makeAxisGuides(dim);root.add(guides.group);
+  const body=new THREE.Group();root.add(body);
+  const verts=bitVertices(dim),edges=bitEdges(dim);
+  const displayEdges=edges.map(([a,b,axis])=>({a,b,axis,line:segment(body, axis===3?COLOR.pink:dim===1?COLOR.cyan:axis===0?COLOR.violet:axis===1?COLOR.cyan:COLOR.amber, dim===1?.037:.021,dim===1?.95:.85)}));
+  const points=verts.map((v,i)=>node(body,(dim===4 && (i&8))?COLOR.pink:dim===1?COLOR.cyan:COLOR.white));
+  const guideDecor=new THREE.Group();guides.group.add(guideDecor);
+  if(dim===2) {
+    const panel=new THREE.Mesh(new THREE.PlaneGeometry(4.4,4.4),material(COLOR.violet,.065));
+    panel.position.z=-.035;body.add(panel);
+    for(let j=-2;j<=2;j++)if(j!==0) {
+      guideLine(guideDecor,[j*.44*2.2,-2.2,-.04],[j*.44*2.2,2.2,-.04],COLOR.cyan,.09,.006);
+      guideLine(guideDecor,[-2.2,j*.44*2.2,-.04],[2.2,j*.44*2.2,-.04],COLOR.cyan,.09,.006);
+    }
+  }
+  if(dim===3) {
+    const cube=new THREE.Mesh(new THREE.BoxGeometry(3.72,3.72,3.72),material(COLOR.violet,.07));
+    cube.renderOrder=-1;body.add(cube);root.userData.cube=cube;
+  }
+  if(dim===4) {
+    const tRing=new THREE.Group();
+    for(let i=0;i<3;i++) {
+      const pts=[];for(let j=0;j<=120;j++) {
+        const ang=j/120*Math.PI*2;const r=4.5+i*.40;
+        pts.push(new THREE.Vector3(Math.cos(ang)*r,Math.sin(ang)*r,0));
+      }
+      const path=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:i%2?COLOR.violet:COLOR.cyan,transparent:true,opacity:.075,depthWrite:false}));
+      path.rotation.x=i*.25+.12; tRing.add(path);
+    }
+    guideDecor.add(tRing);
+  }
+  groups[dim]=root;
+  geometryObjects[dim]={root,body,guides,verts,edges:displayEdges,points};
+}
+for(let d=1;d<=4;d++)makeObject(d);
+
+// A 4D cross section intersects the hypercube's square faces with W=constant.
+// Each 2D face intersection contributes an edge of the resulting 3D polyhedron.
+const hyperSlice=new THREE.Group();geometryObjects[4].root.add(hyperSlice);
+const sliceSegments=Array.from({length:64},()=>segment(hyperSlice,COLOR.amber,.029,.94));
+const faces4=[];
+for(let a=0;a<4;a++)for(let b=a+1;b<4;b++) {
+  const other=[0,1,2,3].filter(i=>i!==a&&i!==b);
+  for(let bits=0;bits<4;bits++) {
+    const base=((bits&1)?(1<<other[0]):0)|((bits&2)?(1<<other[1]):0);
+    faces4.push([base,base|(1<<a),base|(1<<a)|(1<<b),base|(1<<b)]);
+  }
+}
+function rotatePlane(v,a,b,angle) {
+  const c=Math.cos(angle),s=Math.sin(angle);
+  const va=v[a],vb=v[b];v[a]=va*c-vb*s;v[b]=va*s+vb*c;
+}
+function projectW(v) {
+  const f=STATE.method==='orthographic'?1:THREE.MathUtils.clamp(STATE.distance/(STATE.distance-v[3]),.3,2.7);
+  return [v[0]*f,v[1]*f,v[2]*f];
+}
+function rotated4D() {
+  const time=STATE.phase;
+  return geometryObjects[4].verts.map(base=> {
+    const v=base.slice();
+    rotatePlane(v,0,3,STATE.xw*DEG+time*.49);
+    rotatePlane(v,1,3,STATE.yw*DEG+time*.36);
+    rotatePlane(v,2,3,time*.21+.24);
+    rotatePlane(v,0,1,time*.09+.12);
+    return v;
+  });
+}
+function updateSlice(vectors) {
+  let shown=0;
+  if(!STATE.showSlice||!STATE.edges) {
+    hyperSlice.visible=false;
+    return;
+  }
+  hyperSlice.visible=true;
+  for(const face of faces4) {
+    const pts=[];
+    for(let k=0;k<4;k++) {
+      const a=vectors[face[k]],b=vectors[face[(k+1)%4]];
+      const da=a[3]-STATE.slice,db=b[3]-STATE.slice;
+      if(Math.abs(da-db)<1e-7) continue;
+      const t=-da/(db-da);
+      if(t < -.0001||t > 1.0001)continue;
+      const v=a.map((p,i)=>p+(b[i]-p)*THREE.MathUtils.clamp(t,0,1));
+      const three=projectW(v);
+      if(!pts.some(p=>Math.hypot(p[0]-three[0],p[1]-three[1],p[2]-three[2])<.001))pts.push(three);
+    }
+    if(pts.length===2 && shown<sliceSegments.length) {
+      placeSegment(sliceSegments[shown++],pts[0],pts[1],1.15);
+    }
+  }
+  for(let i=0;i<sliceSegments.length;i++){
+    const show=i<shown;sliceSegments[i].core.visible=show;sliceSegments[i].halo.visible=show;
+  }
+}
+const onePulse = new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture,color:COLOR.amber,transparent:true,opacity:.82,depthWrite:false,blending:THREE.AdditiveBlending}));
+onePulse.scale.set(.65,.65,1);geometryObjects[1].body.add(onePulse);
+function updateObjects() {
+  for(let d=1;d<=4;d++) {
+    const obj=geometryObjects[d];
+    obj.root.visible=d===STATE.dimension;
+    if(d!==STATE.dimension)continue;
+    obj.root.scale.setScalar(STATE.scale);
+    const coords=(d===4)?rotated4D().map(projectW):obj.verts.map(p=>p.slice(0,3));
+    obj.body.rotation.set(0,0,0);
+    if(d===2)obj.body.rotation.z=STATE.phase*.34;
+    if(d===3) {
+      obj.body.rotation.y=STATE.phase*.23+.27;
+      obj.body.rotation.x=Math.sin(STATE.phase*.32)*.20;
+    }
+    for(const e of obj.edges) {
+      e.line.core.visible=STATE.edges;e.line.halo.visible=STATE.edges;
+      if(STATE.edges)placeSegment(e.line,coords[e.a],coords[e.b]);
+      e.line.halo.material.opacity=.055*STATE.glow;
+      e.line.core.material.opacity=.83 + .13*Math.min(STATE.glow,1);
+    }
+    for(let i=0;i<obj.points.length;i++) {
+      const {point,halo}=obj.points[i];
+      point.visible=STATE.vertices;halo.visible=STATE.vertices&&STATE.glow>0;
+      point.position.set(...coords[i]);halo.position.set(...coords[i]);
+      halo.material.opacity=.19*STATE.glow;
+      if(d===4) {
+        // Encode the rotated fourth coordinate as a cyan ↔ violet tint.
+        const w=rotatedCache[i][3];
+        const mix=THREE.MathUtils.clamp((w+3.3)/6.6,0,1);
+        point.material.color.copy(new THREE.Color(COLOR.cyan)).lerp(new THREE.Color(COLOR.pink),mix);
+        halo.material.color.copy(point.material.color);
+      }
+    }
+    obj.guides.group.visible=STATE.guides;
+    obj.guides.labels.visible=STATE.labels;
+    if(d===1)onePulse.position.set(-3.18+(Math.sin(STATE.phase*1.9)+1)*3.18,0,0);
+    if(d===4)updateSlice(rotatedCache);
+  }
+}
+let rotatedCache=[];
+function frameGeometry() {
+  // Compute rotated 4D positions only once per rendered frame.
+  rotatedCache=rotated4D();
+  updateObjects();
+}
+
+let camLerp=null;
+const tempCamPos=new THREE.Vector3(),tempTarget=new THREE.Vector3();
+function setCameraForDimension(d,immediate=false) {
+  const targetPos=new THREE.Vector3(...DATA[d].camera),targetLook=new THREE.Vector3(0,0,0);
+  if(immediate) { camera.position.copy(targetPos);controls.target.copy(targetLook);controls.update();camLerp=null;return; }
+  camLerp={from:camera.position.clone(),to:targetPos,fromTarget:controls.target.clone(),toTarget:targetLook,progress:0};
+}
+controls.addEventListener('start',()=>{camLerp=null;});
+function updateCamera(dt) {
+  if(!camLerp){controls.update();return;}
+  camLerp.progress=Math.min(1,camLerp.progress+dt*1.75);
+  const t=camLerp.progress,e=t*t*(3-2*t);
+  camera.position.lerpVectors(camLerp.from,camLerp.to,e);
+  controls.target.lerpVectors(camLerp.fromTarget,camLerp.toTarget,e);
+  controls.update();if(t>=1)camLerp=null;
+}
+function updateHUD() {
+  const d=STATE.dimension,info=DATA[d];
+  $('statusBadge').textContent=`${d}D · ${info.geometry}`;
+  $('hudDim').textContent=`${d} / 4`;
+  $('dimProgress').style.width=`${d*25}%`;
+  $('hudShape').textContent=info.geometry;
+  $('hudCoords').textContent=info.coords;
+  $('hudCounts').textContent=`${info.v} / ${info.e}`;
+  $('hudProjection').textContent=d===4?(STATE.method==='perspective'?'4D → 3D → 2D':'4D orthographic → 2D'):d===3?'3D → 2D':'${d}D embedded in 3D';
+  $('hudMotion').textContent=STATE.paused?'Paused':d===4?'XW · YW · ZW':d===3?'XYZ rotation':d===2?'Planar rotation':'X-axis pulse';
+  $('sceneTitle').textContent=info.title;$('sceneDescription').textContent=info.subtitle;
+  $('statSpace').textContent=info.label;
+  $('statCounts').textContent=d===4?'16 / 32 / 24 / 8':d===3?'8 / 12 / 6 / 1':d===2?'4 / 4 / 1 / —':'2 / 1 / — / —';
+  $('statExplanation').textContent=info.explanation;
+  $('statView').textContent=d===4?(STATE.method==='perspective'?'4D perspective':'4D orthographic'):'3D camera projection';
+  $('cornerHint').textContent=d===4?'PROJECTION OF ℝ⁴ INTO ℝ³':d===3?'EXPLORE 3D SPACE':d===2?'FRONTAL VIEW OF A 2D PLANE':'MOVEMENT ALONG ONE AXIS';
+  for(let i=1;i<=4;i++){
+    const b=document.querySelector(`.dock-btn[data-dimension="${i}"]`);
+    b.classList.toggle('active',d===i);
+    b.setAttribute('aria-pressed',String(d===i));
+  }
+  const fourD=d===4;
+  for(const id of ['fourDGeoLabel','xwGroup','ywGroup','sliceGroup','sliceToggleRow'])$(id).style.display=fourD?'':'none';
+  $('geometryTip').textContent=info.explanation;
+  $('selectProjection').disabled=!fourD;
+  $('sliderDistance').disabled=!fourD;
+  controls.enableRotate=d>=3;
+}
+function chooseDimension(d) {
+  if(!DATA[d])return;
+  STATE.dimension=d;
+  setCameraForDimension(d);
+  updateHUD();
+}
+function setPaused(value) {
+  STATE.paused=value;
+  $('btnPause').textContent=value?'▶ Resume':'⏸ Pause';
+  $('btnPause').classList.toggle('active',value);
+  updateHUD();
+}
+function setGuides(value) {
+  STATE.guides=value;
+  $('toggleGuides').checked=value;
+  $('btnGuides').classList.toggle('active',value);
+  $('btnGuides').textContent=value?'⌗ Guides':'⌗ Guides Off';
+}
+function resetOrientation() {
+  STATE.phase=0;STATE.xw=20;STATE.yw=-15;STATE.slice=0;
+  $('sliderXW').value=20;$('xwVal').textContent='20°';
+  $('sliderYW').value=-15;$('ywVal').textContent='-15°';
+  $('sliderSlice').value=0;$('sliceVal').textContent='0.00';
+  frameGeometry();
+}
+function resetAll() {
+  resetOrientation();
+  STATE.scale=1;$('sliderScale').value=1;$('scaleVal').textContent='1.00×';
+  setCameraForDimension(STATE.dimension);
+}
+function bindRange(id,key,out,formatter) {
+  const slider=$(id);
+  slider.addEventListener('input',()=>{
+    STATE[key]=Number(slider.value);
+    $(out).textContent=formatter(STATE[key]);
+    if(key==='distance') updateHUD();
+  });
+}
+bindRange('sliderSpeed','speed','speedVal',v=>`${v.toFixed(2)}×`);
+bindRange('sliderScale','scale','scaleVal',v=>`${v.toFixed(2)}×`);
+bindRange('sliderXW','xw','xwVal',v=>`${v}°`);
+bindRange('sliderYW','yw','ywVal',v=>`${v}°`);
+bindRange('sliderSlice','slice','sliceVal',v=>v.toFixed(2));
+bindRange('sliderDistance','distance','distVal',v=>v.toFixed(1));
+bindRange('sliderGlow','glow','glowVal',v=>v.toFixed(2));
+bindRange('sliderStars','stars','starsVal',v=>v.toFixed(2));
+$('selectProjection').addEventListener('change',e=>{STATE.method=e.target.value;updateHUD();});
+$('toggleSlice').addEventListener('change',e=>{STATE.showSlice=e.target.checked;});
+$('toggleGuides').addEventListener('change',e=>setGuides(e.target.checked));
+$('toggleVertices').addEventListener('change',e=>{STATE.vertices=e.target.checked;});
+$('toggleEdges').addEventListener('change',e=>{STATE.edges=e.target.checked;});
+$('toggleLabels').addEventListener('change',e=>{STATE.labels=e.target.checked;});
+$('btnGuides').addEventListener('click',()=>setGuides(!STATE.guides));
+$('btnReset').addEventListener('click',resetAll);
+$('btnResetRotation').addEventListener('click',resetOrientation);
+$('btnPause').addEventListener('click',()=>setPaused(!STATE.paused));
+document.querySelectorAll('.dock-btn').forEach(b=>b.addEventListener('click',()=>chooseDimension(Number(b.dataset.dimension))));
+document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tab-btn').forEach(t=>t.classList.toggle('active',t===b));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.toggle('active',t.id===b.dataset.tab));
+}));
+$('btnDrawer').addEventListener('click',()=>{
+  const closed=$('inspectorDrawer').classList.toggle('collapsed');
+  $('btnDrawer').classList.toggle('active',!closed);
+});
+$('btnCapture').addEventListener('click',()=>{
+  renderer.render(scene,camera);
+  const a=document.createElement('a');
+  a.download=`dimension-lab-${STATE.dimension}d.png`;
+  a.href=renderer.domElement.toDataURL('image/png');
+  document.body.appendChild(a);a.click();a.remove();
+});
+$('btnFullscreen').addEventListener('click',async()=>{
+  try{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();else await document.exitFullscreen();}
+  catch(err){console.warn('Fullscreen could not be activated',err);}
+});
+window.addEventListener('keydown',e=>{
+  if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)||e.ctrlKey||e.metaKey||e.altKey)return;
+  if(e.code==='Space'){e.preventDefault();setPaused(!STATE.paused);}
+  else if('1234'.includes(e.key)&&e.key.length===1)chooseDimension(Number(e.key));
+  else if(e.code==='KeyG')setGuides(!STATE.guides);
+  else if(e.code==='KeyR')resetAll();
+  else if(e.code==='KeyH')document.body.classList.toggle('ui-hidden');
+  else if(e.code==='KeyP')$('btnCapture').click();
+  else if(e.code==='KeyF')$('btnFullscreen').click();
+});
+function onResize(){camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight);}
+window.addEventListener('resize',onResize);
+
+let prevTime=performance.now(),frames=0,frameInterval=0;
+function animate(now) {
+  requestAnimationFrame(animate);
+  const dt=Math.min((now-prevTime)/1000,.065);prevTime=now;
+  frames++;frameInterval+=dt;
+  if(frameInterval>.65){
+    STATE.fps=Math.round(frames/frameInterval);
+    $('statFps').textContent=`${STATE.fps} FPS`;
+    frames=0;frameInterval=0;
+  }
+  if(!STATE.paused)STATE.phase+=dt*STATE.speed;
+  $('statPhase').textContent=`${((STATE.phase*.49/DEG)%360).toFixed(1)}°`;
+  updateCamera(dt);
+  rotatedCache=rotated4D();
+  updateObjects();
+  starMaterial.opacity=STATE.stars*.62;
+  stars.rotation.y=STATE.phase*.008;
+  backgroundGlow.material.opacity=.08+STATE.glow*.12;
+  backgroundGlow.scale.setScalar(1);backgroundGlow.scale.set(28,23,1);
+  onePulse.material.opacity=STATE.glow*.72;
+  renderer.render(scene,camera);
+}
+updateHUD();setGuides(true);frameGeometry();
+requestAnimationFrame(animate);
+
+</script>
+<script src="assets/atelier-ui.js"></script>
+</body>
+</html>
